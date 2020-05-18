@@ -4,4 +4,5 @@ application/Viewport.js
 
 ui/control/EMail.js
 ui/control/Youtube.js
+ui/control/Audio.js
 ui/control/Xml.js
