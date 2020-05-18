@@ -1,3 +1,53 @@
 /*
  * Приложение Z8 Template не содержит никаких специальных определений стилей CSS
  */
+
+.cell .xml-editor {
+    position: relative;
+    min-height: 200px;
+    background-color: white;
+}
+
+.cell .xml-editor .xml-editor__input,
+.cell .xml-editor .xml-editor__output{
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    margin: 21px 0 0;
+    font-family: monospace;
+    line-height: 16px;
+    font-size: 12px;
+    border: 0;
+}
+
+.cell .xml-editor .xml-editor__input {
+    opacity: 1;
+    z-index: 2;
+    resize: none;
+    border: 1px solid #dddddd;
+    color: #999999;
+    background: transparent !important;
+    text-shadow: 0 0 0 rgba(0, 0, 0, 0);
+    -webkit-text-fill-color: transparent;
+}
+
+.cell .xml-editor .xml-editor__output {
+    z-index: 1;
+    pointer-events: none;
+    overflow: auto;
+    white-space: pre-wrap;
+    white-space: -moz-pre-wrap;
+    white-space: -o-pre-wrap;
+    word-wrap: break-word;
+}
+
+.xml-editor__highlighting-attr {
+    color: tomato;
+}
+
+.xml-editor__highlighting-tag {
+    color: steelblue;
+}
