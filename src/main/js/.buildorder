@@ -3,4 +3,5 @@ application/User.js
 application/Viewport.js
 
 ui/control/EMail.js
+ui/control/Youtube.js
 ui/control/Xml.js
