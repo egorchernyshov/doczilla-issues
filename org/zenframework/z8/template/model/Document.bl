@@ -45,6 +45,10 @@ public class Document extends Table {
 	/* Максимальная длина значения поля email */
 	email.length = 50;
 
+	[name "Audio"]
+	[displayName "Audio-файл"]
+	public FileField audio;
+
 	[name "Youtube"]
 	[displayName "Url видео на Youtube"]
 	public StringField youtube;
