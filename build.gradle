@@ -1,0 +1,314 @@
+buildscript {
+	repositories {
+		mavenLocal()
+		mavenCentral()
+		maven { url 'http://mvn.revoltsoft.ru/' }
+		maven { url 'https://plugins.gradle.org/m2/' }
+	}
+	dependencies {
+		classpath 'com.eriwen:gradle-css-plugin:2.14.0'
+		classpath 'com.eriwen:gradle-js-plugin:2.14.1'
+	}
+}
+
+repositories {
+	mavenLocal()
+	maven { url 'http://mvn.revoltsoft.ru/' }
+}
+
+group = 'org.zenframework.z8'
+version = '1.0'
+
+ext.buildFolder = './target'
+buildDir = buildFolder
+
+ext.z8Version = '1.3.0'
+
+ext.tmpPath = System.properties['java.io.tmpdir'] ?: '/tmp'
+
+apply plugin: 'eclipse'
+apply plugin: 'application'
+apply plugin: 'js'
+apply plugin: 'css'
+//apply plugin: 'war'
+//apply plugin: 'maven'
+//apply plugin: 'maven-publish'
+
+configurations {
+	/* Z8 BL-to-Java compiler dependency */
+	compiler
+	/* Z8 Boot classpath dependency */
+	boot
+	/* Z8 JavaScript dependency */
+	revolt { transitive = false }
+	/* WEB-INF resource */
+	resources { transitive = false }
+	/* BL language dependency */
+	lang { transitive = false }
+}
+
+dependencies {
+	implementation "org.zenframework.z8:org.zenframework.z8.server:${z8Version}"
+	implementation "org.zenframework.z8:org.zenframework.z8.lang:${z8Version}"
+	runtime "org.zenframework.z8:org.zenframework.z8.webserver:${z8Version}"
+	runtime "org.zenframework.z8:org.zenframework.z8.oda.driver:${z8Version}"
+	runtime "org.zenframework.z8.dependencies.jdbc:postgresql-42.0.0:3.0"
+
+	boot "org.zenframework.z8:org.zenframework.z8.boot:${z8Version}"
+
+	/* Z8 specific dependencies are resolved directly to files in Z8 home or to Maven artifacts otherwise */
+	lang !project.hasProperty('z8Home') ? "org.zenframework.z8:org.zenframework.z8.lang:${z8Version}:bl"
+			: files("${z8Home}/org.zenframework.z8.lang/target/libs/org.zenframework.z8.lang-bl.jar")
+	revolt !project.hasProperty('z8Home') ? "org.zenframework.z8:org.zenframework.z8.js:${z8Version}:rz"
+			: files("${z8Home}/org.zenframework.z8.js/target/libs/org.zenframework.z8.js-rz.jar")
+	resources !project.hasProperty('z8Home') ? "org.zenframework.z8:org.zenframework.z8.resources:${z8Version}:rz"
+			: files("${z8Home}/org.zenframework.z8.resources/target/libs/org.zenframework.z8.resources-rz.jar")
+
+	compiler "org.zenframework.z8:org.zenframework.z8.compiler:${z8Version}"
+}
+
+eclipse {
+	// Z8 nature
+	project.natures 'org.zenframework.z8.pde.ProjectNature'
+	// Eclipse: default java output -> $buildDir/classes/default
+	classpath.defaultOutputDir = new File(buildDir, 'classes/main')
+	// Eclipse: java source folders output -> $buildFolder/classes/...
+	classpath.file.whenMerged {
+		entries.findAll { entry ->
+			entry instanceof org.gradle.plugins.ide.eclipse.model.SourceFolder
+		}.each { entry ->
+			entry.output = entry.output.replace('bin/', "${buildFolder}/classes/")
+		}
+		if (!project.hasProperty('z8Home'))
+			entries += new org.gradle.plugins.ide.eclipse.model.ProjectDependency('/org.zenframework.z8.lang')
+	}
+}
+
+// Bl & Java config
+
+ext.blDepsPath = "${tmpPath}/${project.name}/dependencies/bl"
+ext.blOutput = "${projectDir}/.java"
+
+/* Unpack BL dependency fo BL-to-java compilation */
+task unpackLang(type: Copy) {
+	from zipTree(configurations.lang.singleFile.absolutePath)
+	into blDepsPath
+}
+
+/* Compile BL to Java */
+task compileBl(type: JavaExec) {
+	dependsOn unpackLang
+
+	group = 'Build'
+	description = 'Compile BL sources'
+
+	classpath = configurations.compiler
+	main = 'org.zenframework.z8.compiler.cmd.Main'
+	args = [
+		projectDir,
+		"-projectName:${project.name}",
+		"-output:${blOutput}",
+		"-requires:${blDepsPath}"
+	]
+}
+
+/* Set Java version and sources encoding */
+tasks.withType(JavaCompile) {
+	sourceCompatibility = JavaVersion.VERSION_1_8
+	targetCompatibility = JavaVersion.VERSION_1_8
+	options.encoding = 'UTF-8'
+}
+
+/* Add BL-compiled Java-sources */
+sourceSets {
+	main {
+		java.srcDirs blOutput
+		java.outputDir = file("${buildDir}/classes/main")
+		resources.srcDirs blOutput
+		output.resourcesDir = file("${buildDir}/classes/main")
+	}
+}
+
+// Web config
+
+/* Concat CSS-files, CSS-sources order is specified in src/main/css/.buildorder */
+task concatCss {
+	if (project.hasProperty('z8Home'))
+		dependsOn gradle.includedBuild(file(z8Home).name).task(':org.zenframework.z8.js:assembleRz')
+	doLast {
+		def source = zipTree(configurations.revolt.singleFile).matching {
+			include "web/debug/css/revolt.css"
+		}.plus(file("${projectDir}/src/main/css/.buildorder").readLines().findAll { !it.trim().isEmpty() }
+				.collect { file("${projectDir}/src/main/css/${it}") })
+		def dest = file("${buildDir}/web/debug/css/${rootProject.name}.css")
+		dest.parentFile.mkdirs()
+		dest.newWriter('UTF-8').withWriter { w ->
+			source.each { f -> w << f.getText('UTF-8') << '\n' }
+		}
+	}
+}
+
+/* Minify CSS file */
+minifyCss {
+	dependsOn concatCss
+	source = file("${buildDir}/web/debug/css/${rootProject.name}.css")
+	dest = "${buildDir}/web/css/${project.name}.css"
+	closure { warningLevel = 'QUIET' }
+	doLast {
+		ant.replaceregexp(match: '(calc\\([\\d|\\.]+[^+]*)(\\+)', replace:'\1 \2 ', flags:'g') {
+			file "${buildDir}/web/css/${rootProject.name}.css"
+		}
+	}
+}
+
+/* Concat JavaScript-files, JavaScript-sources order is specified in src/main/js/.buildorder */
+task concatJs {
+	if (project.hasProperty('z8Home'))
+		dependsOn gradle.includedBuild(file(z8Home).name).task(':org.zenframework.z8.js:assembleRz')
+	doLast {
+		def source = zipTree(configurations.revolt.singleFile).matching {
+			include "web/debug/revolt.js"
+		}.plus(file("${projectDir}/src/main/js/.buildorder").readLines().findAll { !it.trim().isEmpty() }
+				.collect { file("${projectDir}/src/main/js/${it}") })
+		def dest = file("${buildDir}/web/debug/${rootProject.name}.js")
+		dest.parentFile.mkdirs()
+		dest.newWriter('UTF-8').withWriter { w ->
+			source.each { f -> w << f.getText('UTF-8') << '\n' }
+		}
+	}
+}
+
+/* Minify JavaScript */
+minifyJs {
+	dependsOn concatJs
+	source = file("${buildDir}/web/debug/${rootProject.name}.js")
+	dest = file("${buildDir}/web/${project.name}.js")
+	closure {
+		warningLevel = 'QUIET'
+		compilerOptions = [
+			languageIn: 'ECMASCRIPT6',
+			languageOut: 'ECMASCRIPT5',
+			rewritePolyfills: false
+		]
+	}
+}
+
+/* Copy static resources to build folder */
+task prepareResources(type: Copy, group: 'Build') {
+	if (project.hasProperty('z8Home'))
+		dependsOn gradle.includedBuild(file(z8Home).name).task(':org.zenframework.z8.resources:assembleRz')
+	from (zipTree(configurations.resources.singleFile)) {
+		include 'bin/**/*'
+		include 'web/css/**'
+		include 'web/WEB-INF/fonts/**'
+		include 'web/WEB-INF/reports/**'
+		include 'web/WEB-INF/resources/**'
+		filesMatching('bin/*.sh') {
+			expand project: project
+		}
+	}
+	into buildDir
+}
+
+/* Copy web resources to webapp folder */
+task prepareWeb(type: Copy, group: 'Build') {
+	from('src/main') {
+		include 'web/**/*'
+		filesMatching(['web/**/*.html', 'web/WEB-INF/project.xml']) {
+			expand project: rootProject
+		}
+	}
+	into buildDir
+}
+
+/* Prepare non-minified CSS & JS for debugging */
+task prepareDebug(type: Copy) {
+	dependsOn prepareWeb
+
+	from ("${buildDir}/web") {
+		include 'css/fonts/**'
+	}
+	from('src/main/web') {
+		exclude 'WEB-INF/**'
+		exclude 'debug.html'
+	}
+	into "${buildDir}/web/debug"
+}
+
+/* Assemble all web resources */
+task assembleWeb(group: 'Build', dependsOn: [ minifyCss, minifyJs, prepareResources, prepareWeb, prepareDebug ])
+
+// Application config
+
+application {
+	mainClassName = 'org.zenframework.z8.server.engine.ServerMain'
+}
+
+ext.appJavaXmx = '2048M'
+ext.appHost = java.net.InetAddress.getLocalHost().getHostAddress()
+ext.appPort = 9080
+ext.appMaxFormContentSize = 15000000
+
+run {
+	dependsOn assembleWeb
+	jvmArgs = [
+		"-Xmx${appJavaXmx}",
+		"-Xbootclasspath/p:${configurations.boot.singleFile.toPath()}",
+		"-Dorg.eclipse.jetty.server.Request.maxFormContentSize=${appMaxFormContentSize}",
+		"-Dorg.mortbay.http.HttpRequest.maxFormContentSize=${appMaxFormContentSize}",
+		"-Djava.rmi.server.hostname=${appHost}",
+	]
+	args = ['-server', 'webserver']
+	workingDir = "${buildDir}/web/WEB-INF"
+}
+
+// WAR config
+
+//war {
+//	dependsOn assembleWeb
+//	exclude('debug.html')
+//	from("${buildDir}/web") {
+//		include '**/*.css'
+//		include '**/*.js'
+//	}
+//	filesMatching('**/*.html') {
+//		expand project: project
+//	}
+//
+//	// TODO Exclude WEB-INF/lib/*.pom files
+//	//exclude('**/*.pom')
+//}
+
+// Distribution config
+
+distributions {
+	main {
+		contents {
+			from(buildDir) {
+				include 'web/**'
+				include 'bin/**'
+				exclude 'web/debug/**'
+				exclude 'web/WEB-INF/**'
+			}
+			from("${projectDir}/src/main") {
+				include 'bin/**'
+				exclude 'bin/*.sh'
+			}
+			from("${projectDir}/src/main") {
+				include 'bin/*.sh'
+				include 'conf/**'
+				expand project: project
+			}
+			into ('work') {
+				from ("${buildDir}/web/WEB-INF") {
+					exclude '*.cache'
+					exclude 'storage/**/*'
+					exclude 'reports/generated/**/*'
+				}
+			}
+		}
+	}
+}
+
+distZip.dependsOn assembleWeb
+distTar.dependsOn assembleWeb

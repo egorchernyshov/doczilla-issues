@@ -1,0 +1,5 @@
+rootProject.name = 'z8-template'
+
+if (z8Home != null)
+	includeBuild(z8Home)
+
