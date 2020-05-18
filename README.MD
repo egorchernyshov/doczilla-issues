@@ -1,11 +1,20 @@
-# Z8 Template Project Build How-to
+## Тестовое задание
 
-Copy _gradle.properties.default_ to _gradle.properties_ then choose one of project building options.
+- [Описание](test_tasks.md)
+- Для Postgres [docker-compose](docker-compose.yml)
 
-You have 2 options to develope Z8 porject:
-1. Using Z8 Project sources from Git - _z8.home_ must point to Z8 Project folder, Gradle build script assumes Z8 Project is in Eclipse workspace
-1. Using Z8 Project binaries - _z8Home_ must not be set
+## Не смог разобраться
 
-Eclipse workspace configuration:
-1. If you use Z8 Project sources, Z8 Project must be in the same workspace.
-1. If you use Z8 Project binaries, subproject _org.zenframework.z8.lang_ must be in the same workspace. Other Z8 dependencies are resolved with Gradle Maven plugin.
+1. Как предсказуемо запускать проект. Только лишь этот набор команд не достаточен: 
+
+```bash
+grable build
+grable assembleWeb
+gradle run
+```
+
+После настроенного Eclipse билд работает, потому что работает иначе, используя директорию `.java`. Я писал в Intellij Idea, потому что к ней привыкли пальцы и мне в не удобнее, но настроить без Eclipse запуск проекта не смог.
+
+2. Жизненный цикл компонента, чтобы после удаления записи удалить добавленные элементы
+
+3. Настройка модального окна, размеры и позиция
