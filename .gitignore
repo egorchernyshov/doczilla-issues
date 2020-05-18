@@ -9,3 +9,7 @@
 *.cache
 *-sources.jar
 *-javadoc.jar
+.idea/
+gradle/
+gradlew
+gradlew.bat
