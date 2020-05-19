@@ -58,22 +58,6 @@ Z8.define('org.zenframework.z8.template.controls.Xml', {
     },
 
     /**
-     * «Нечто» вызывает этот метод каждый раз, когда вносятся изменения в поле.
-     * Поэтому он переопределён за неимением более подходящего варианта.
-     *
-     * @param {string} value
-     *
-     * @returns {string}
-     *
-     * @override
-     */
-    rawToValue: function (value) {
-        this._setFormattedValueToEditorOutput(value);
-
-        return value;
-    },
-
-    /**
      * Переопределён, чтобы убрать добавление атрибута `title`.
      *
      * @param {string} value
@@ -104,6 +88,7 @@ Z8.define('org.zenframework.z8.template.controls.Xml', {
 
     /**
      * Синхронизирует прокрутку текста в элементах .xml-editor__input и .xml-editor__output
+     *
      * @param {Event} event
      * @param {HTMLTextAreaElement} target
      *
